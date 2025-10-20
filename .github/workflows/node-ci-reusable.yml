@@ -83,9 +83,15 @@ jobs:
       - name: Install dependencies
         run: |
           case "${{ steps.pm.outputs.name }}" in
-            pnpm) pnpm install --frozen-lockfile ;;
-            yarn) yarn install --frozen-lockfile ;;
-            npm)  npm ci ;;
+            pnpm)
+              if [[ -f pnpm-lock.yaml ]]; then pnpm install --frozen-lockfile; else pnpm install; fi
+              ;;
+            yarn)
+              if [[ -f yarn.lock ]]; then yarn install --frozen-lockfile; else yarn install; fi
+              ;;
+            npm)
+              if [[ -f package-lock.json ]]; then npm ci; else npm install --no-audit --no-fund; fi
+              ;;
           esac
 
       - name: Lint
