@@ -77,7 +77,7 @@ jobs:
         run: corepack enable || true
 
       - name: Extra setup (optional)
-        if: inputs.extra-setup != ''
+        if: ${{ inputs.extra-setup != '' }}
         run: ${{ inputs.extra-setup }}
 
       - name: Install dependencies
@@ -95,7 +95,7 @@ jobs:
           esac
 
       - name: Lint
-        if: inputs.run-lint == true
+        if: ${{ inputs.run-lint }}
         run: |
           if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
             case "${{ steps.pm.outputs.name }}" in
@@ -108,7 +108,7 @@ jobs:
           fi
 
       - name: Test
-        if: inputs.run-test == true
+        if: ${{ inputs.run-test }}
         run: |
           if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
             case "${{ steps.pm.outputs.name }}" in
@@ -121,7 +121,7 @@ jobs:
           fi
 
       - name: Build
-        if: inputs.run-build == true
+        if: ${{ inputs.run-build }}
         run: |
           if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
             case "${{ steps.pm.outputs.name }}" in
