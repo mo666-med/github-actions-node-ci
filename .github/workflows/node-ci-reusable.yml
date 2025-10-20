@@ -63,11 +63,34 @@ jobs:
             echo "name=npm" >> $GITHUB_OUTPUT
           fi
 
-      - name: Setup Node.js
+      - name: Detect lockfile
+        id: lock
+        run: |
+          case "${{ steps.pm.outputs.name }}" in
+            pnpm)
+              if [[ -f pnpm-lock.yaml ]]; then echo "has=true" >> $GITHUB_OUTPUT; echo "path=pnpm-lock.yaml" >> $GITHUB_OUTPUT; else echo "has=false" >> $GITHUB_OUTPUT; fi
+              ;;
+            yarn)
+              if [[ -f yarn.lock ]]; then echo "has=true" >> $GITHUB_OUTPUT; echo "path=yarn.lock" >> $GITHUB_OUTPUT; else echo "has=false" >> $GITHUB_OUTPUT; fi
+              ;;
+            npm)
+              if [[ -f package-lock.json ]]; then echo "has=true" >> $GITHUB_OUTPUT; echo "path=package-lock.json" >> $GITHUB_OUTPUT; elif [[ -f npm-shrinkwrap.json ]]; then echo "has=true" >> $GITHUB_OUTPUT; echo "path=npm-shrinkwrap.json" >> $GITHUB_OUTPUT; else echo "has=false" >> $GITHUB_OUTPUT; fi
+              ;;
+          esac
+
+      - name: Setup Node.js (cached)
+        if: ${{ steps.lock.outputs.has == 'true' }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: ${{ inputs.working-directory }}/${{ steps.lock.outputs.path }}
+
+      - name: Setup Node.js
+        if: ${{ steps.lock.outputs.has != 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
 
       - name: Enable Corepack (yarn/pnpm)
         run: corepack enable || true
