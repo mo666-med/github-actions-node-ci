@@ -1,0 +1,128 @@
+name: Node CI (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        required: false
+        default: '20'
+      os:
+        type: string
+        required: false
+        default: 'ubuntu-latest'
+      working-directory:
+        type: string
+        required: false
+        default: '.'
+      run-lint:
+        type: boolean
+        required: false
+        default: true
+      run-test:
+        type: boolean
+        required: false
+        default: true
+      run-build:
+        type: boolean
+        required: false
+        default: true
+      extra-setup:
+        type: string
+        required: false
+        default: ''
+      pkg-manager:
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  ci:
+    runs-on: ${{ inputs.os }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [[ -n "${{ inputs.pkg-manager }}" ]]; then
+            echo "name=${{ inputs.pkg-manager }}" >> $GITHUB_OUTPUT
+          elif [[ -f pnpm-lock.yaml ]]; then
+            echo "name=pnpm" >> $GITHUB_OUTPUT
+          elif [[ -f yarn.lock ]]; then
+            echo "name=yarn" >> $GITHUB_OUTPUT
+          else
+            echo "name=npm" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ steps.pm.outputs.name }}
+          cache-dependency-path: |
+            ${{ inputs.working-directory }}/pnpm-lock.yaml
+            ${{ inputs.working-directory }}/yarn.lock
+            ${{ inputs.working-directory }}/package-lock.json
+
+      - name: Enable Corepack (yarn/pnpm)
+        run: corepack enable || true
+
+      - name: Extra setup (optional)
+        if: inputs.extra-setup != ''
+        run: ${{ inputs.extra-setup }}
+
+      - name: Install dependencies
+        run: |
+          case "${{ steps.pm.outputs.name }}" in
+            pnpm) pnpm install --frozen-lockfile ;;
+            yarn) yarn install --frozen-lockfile ;;
+            npm)  npm ci ;;
+          esac
+
+      - name: Lint
+        if: inputs.run-lint == true
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.lint ? 0 : 1)"; then
+            case "${{ steps.pm.outputs.name }}" in
+              pnpm) pnpm run lint ;;
+              yarn) yarn lint ;;
+              npm)  npm run lint ;;
+            esac
+          else
+            echo "No lint script; skipping"
+          fi
+
+      - name: Test
+        if: inputs.run-test == true
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)"; then
+            case "${{ steps.pm.outputs.name }}" in
+              pnpm) pnpm test -- --ci ;;
+              yarn) yarn test --ci ;;
+              npm)  npm test -- --ci ;;
+            esac
+          else
+            echo "No test script; skipping"
+          fi
+
+      - name: Build
+        if: inputs.run-build == true
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.build ? 0 : 1)"; then
+            case "${{ steps.pm.outputs.name }}" in
+              pnpm) pnpm run build ;;
+              yarn) yarn build ;;
+              npm)  npm run build ;;
+            esac
+          else
+            echo "No build script; skipping"
+          fi
