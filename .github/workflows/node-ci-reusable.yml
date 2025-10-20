@@ -68,10 +68,6 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ steps.pm.outputs.name }}
-          cache-dependency-path: |
-            ${{ inputs.working-directory }}/pnpm-lock.yaml
-            ${{ inputs.working-directory }}/yarn.lock
-            ${{ inputs.working-directory }}/package-lock.json
 
       - name: Enable Corepack (yarn/pnpm)
         run: corepack enable || true
