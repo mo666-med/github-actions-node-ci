@@ -7,6 +7,18 @@ on:
         type: string
         required: false
         default: '20'
+      sheets-enabled:
+        type: boolean
+        required: false
+        default: false
+      sheets-spreadsheet-id:
+        type: string
+        required: false
+        default: ''
+      sheets-worksheet:
+        type: string
+        required: false
+        default: 'Sheet1'
       os:
         type: string
         required: false
@@ -39,6 +51,10 @@ on:
 jobs:
   ci:
     runs-on: ${{ inputs.os }}
+    env:
+      SHEETS_ENABLED: ${{ inputs.sheets-enabled }}
+      SHEETS_SPREADSHEET_ID: ${{ inputs.sheets-spreadsheet-id }}
+      SHEETS_WORKSHEET: ${{ inputs.sheets-worksheet }}
     permissions:
       contents: read
     defaults:
@@ -151,3 +167,47 @@ jobs:
           else
             echo "No build script; skipping"
           fi
+
+      - name: Report success to Google Sheets
+        if: ${{ env.SHEETS_ENABLED == 'true' && success() }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node -e '
+          const cred = process.env.GOOGLE_SERVICE_ACCOUNT;
+          if (!cred) { console.log("No creds; skip"); process.exit(0); }
+          const {google} = require("googleapis");
+          const auth = new google.auth.JWT(JSON.parse(cred).client_email, undefined, JSON.parse(cred).private_key, ["https://www.googleapis.com/auth/spreadsheets"], undefined);
+          auth.authorize(async (err)=>{
+            if (err) { console.error(err); process.exit(0); }
+            const sheets = google.sheets({version:"v4", auth});
+            const values=[[new Date().toISOString(), process.env.GITHUB_REPOSITORY, process.env.GITHUB_REF_NAME, "success", process.env.GITHUB_SHA]];
+            await sheets.spreadsheets.values.append({
+              spreadsheetId: process.env.SHEETS_SPREADSHEET_ID,
+              range: `${process.env.SHEETS_WORKSHEET}!A:E`,
+              valueInputOption: "USER_ENTERED",
+              requestBody:{ values }
+            });
+          });'
+
+      - name: Report failure to Google Sheets
+        if: ${{ env.SHEETS_ENABLED == 'true' && failure() }}
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node -e '
+          const cred = process.env.GOOGLE_SERVICE_ACCOUNT;
+          if (!cred) { console.log("No creds; skip"); process.exit(0); }
+          const {google} = require("googleapis");
+          const auth = new google.auth.JWT(JSON.parse(cred).client_email, undefined, JSON.parse(cred).private_key, ["https://www.googleapis.com/auth/spreadsheets"], undefined);
+          auth.authorize(async (err)=>{
+            if (err) { console.error(err); process.exit(0); }
+            const sheets = google.sheets({version:"v4", auth});
+            const values=[[new Date().toISOString(), process.env.GITHUB_REPOSITORY, process.env.GITHUB_REF_NAME, "failure", process.env.GITHUB_SHA]];
+            await sheets.spreadsheets.values.append({
+              spreadsheetId: process.env.SHEETS_SPREADSHEET_ID,
+              range: `${process.env.SHEETS_WORKSHEET}!A:E`,
+              valueInputOption: "USER_ENTERED",
+              requestBody:{ values }
+            });
+          });'
